@@ -16,6 +16,7 @@ local Library = {
         Background = Color3.fromRGB(25, 25, 25),
         Secondary = Color3.fromRGB(35, 35, 35),
         Accent = Color3.fromRGB(255, 100, 150),
+        SliderAccent = Color3.fromRGB(147, 112, 219), -- Light purple for slider
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(180, 180, 180),
         Border = Color3.fromRGB(45, 45, 45),
@@ -50,6 +51,12 @@ function Library:CreateWindow(title)
         Parent = PlayerGui,
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    })
+    
+    -- UI Blur Effect
+    local blurEffect = CreateElement("BlurEffect", {
+        Parent = game.Lighting,
+        Size = 10
     })
     
     -- Main Frame
@@ -145,6 +152,7 @@ function Library:CreateWindow(title)
     closeButton.MouseButton1Click:Connect(function()
         Tween(mainFrame, {Size = UDim2.new(0, 0, 0, 0)})
         wait(0.15)
+        blurEffect:Destroy()
         screenGui:Destroy()
     end)
     
@@ -323,13 +331,46 @@ function Library:CreateWindow(title)
         local sliderFill = CreateElement("Frame", {
             Name = "SliderFill",
             Parent = sliderTrack,
-            BackgroundColor3 = Library.Theme.Accent,
+            BackgroundColor3 = Library.Theme.SliderAccent,
             BorderSizePixel = 0,
             Size = UDim2.new((default or min) / (max - min), 0, 1, 0)
         })
         
         CreateElement("UICorner", {
             Parent = sliderFill,
+            CornerRadius = UDim.new(1, 0)
+        })
+        
+        -- Slider Circle/Handle
+        local sliderHandle = CreateElement("Frame", {
+            Name = "SliderHandle",
+            Parent = sliderTrack,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0,
+            Position = UDim2.new((default or min) / (max - min), -8, 0.5, -8),
+            Size = UDim2.new(0, 16, 0, 16),
+            ZIndex = 2
+        })
+        
+        CreateElement("UICorner", {
+            Parent = sliderHandle,
+            CornerRadius = UDim.new(1, 0)
+        })
+        
+        -- Handle shadow effect
+        local handleShadow = CreateElement("Frame", {
+            Name = "HandleShadow",
+            Parent = sliderHandle,
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 0.8,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 2, 0, 2),
+            Size = UDim2.new(1, 0, 1, 0),
+            ZIndex = 1
+        })
+        
+        CreateElement("UICorner", {
+            Parent = handleShadow,
             CornerRadius = UDim.new(1, 0)
         })
         
@@ -350,17 +391,20 @@ function Library:CreateWindow(title)
             
             sliderValue.Text = tostring(currentValue)
             Tween(sliderFill, {Size = UDim2.new(percentage, 0, 1, 0)})
+            Tween(sliderHandle, {Position = UDim2.new(percentage, -8, 0.5, -8)})
             
             if callback then callback(currentValue) end
         end
         
         sliderButton.MouseButton1Down:Connect(function()
             dragging = true
+            Tween(sliderHandle, {Size = UDim2.new(0, 20, 0, 20)}) -- Expand handle when dragging
         end)
         
         UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 dragging = false
+                Tween(sliderHandle, {Size = UDim2.new(0, 16, 0, 16)}) -- Return to normal size
             end
         end)
         
