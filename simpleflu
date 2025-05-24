@@ -1,11 +1,13 @@
--- Roblox UI Library - macOS Acrylic Style
--- Author: Claude AI
--- Version: 2.0
+-- Enhanced Roblox UI Library - macOS Acrylic Style
+-- Author: Claude AI (Enhanced)
+-- Version: 3.1
+-- Fixed multiple issues, added TextInput functionality, and improved code structure.
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService") -- Not currently used, but kept for potential future use.
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
@@ -16,15 +18,19 @@ local Library = {
         Background = Color3.fromRGB(15, 15, 15),
         Secondary = Color3.fromRGB(25, 25, 25),
         TabBackground = Color3.fromRGB(20, 20, 20),
-        Accent = Color3.fromRGB(255, 100, 150),
-        SliderAccent = Color3.fromRGB(147, 112, 219),
+        Accent = Color3.fromRGB(255, 100, 150), -- Main accent color
+        SliderAccent = Color3.fromRGB(147, 112, 219), -- Specific accent for sliders
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(180, 180, 180),
         Border = Color3.fromRGB(35, 35, 35),
         Hover = Color3.fromRGB(30, 30, 30),
-        TitleBar = Color3.fromRGB(22, 22, 22)
+        TitleBar = Color3.fromRGB(22, 22, 22),
+        Success = Color3.fromRGB(39, 201, 63),
+        Warning = Color3.fromRGB(255, 189, 46),
+        Error = Color3.fromRGB(255, 95, 86)
     },
-    TweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    FastTweenInfo = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 }
 
 -- Utility Functions
@@ -43,56 +49,115 @@ local function Tween(object, properties, tweenInfo)
     return tween
 end
 
+local function ClampNumber(value, min, max)
+    return math.max(min, math.min(max, value))
+end
+
+local function FormatNumber(num, decimals)
+    decimals = decimals or 0
+    local multiplier = 10^decimals
+    return math.floor(num * multiplier + 0.5) / multiplier
+end
+
+-- Enhanced Dragging System
+local function MakeDraggable(frame, handle)
+    handle = handle or frame
+    local dragging = false
+    local dragStart = Vector2.new(0, 0)
+    local startPos = UDim2.new(0, 0, 0, 0)
+    
+    -- Function to update the frame's position during drag
+    local function updateDrag(input)
+        if dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end
+    
+    -- Handle input beginning (mouse down)
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            -- Capture mouse movement even if it leaves the handle
+            UserInputService.InputChanged:Connect(function(inputChanged)
+                if dragging and inputChanged.UserInputType == Enum.UserInputType.MouseMovement then
+                    updateDrag(inputChanged)
+                end
+            end)
+        end
+    end)
+    
+    -- Handle input ending (mouse up)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+end
+
 -- Main Library Functions
 function Library:CreateWindow(title)
     local window = {
         tabs = {},
-        currentTab = nil
+        currentTab = nil,
+        isMinimized = false,
+        isMaximized = false,
+        originalSize = UDim2.new(0, 800, 0, 500),
+        originalPosition = UDim2.new(0.5, -400, 0.5, -250)
     }
     
-    -- Create ScreenGui
+    -- Create ScreenGui with proper cleanup
     local screenGui = CreateElement("ScreenGui", {
-        Name = "SimplinessUI",
+        Name = "SimplinessUI_" .. tostring(math.random(1000, 9999)),
         Parent = PlayerGui,
-        ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ResetOnSpawn = false, -- Keep the UI even if the player respawns
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 100 -- Ensure it's on top of most other GUIs
     })
     
-    -- Acrylic Blur Frame (Background blur effect)
-    local blurFrame = CreateElement("Frame", {
-        Name = "BlurFrame",
-        Parent = screenGui,
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.3,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0)
-    })
-    
-    -- Main Frame (Made longer and darker)
+    -- Main Frame with improved styling
     local mainFrame = CreateElement("Frame", {
         Name = "MainFrame",
         Parent = screenGui,
         BackgroundColor3 = Library.Theme.Background,
-        BackgroundTransparency = 0.1,
+        BackgroundTransparency = 0.05, -- Slight transparency for acrylic effect
         BorderSizePixel = 0,
-        Position = UDim2.new(0.5, -400, 0.5, -250),
-        Size = UDim2.new(0, 800, 0, 500),
-        Active = true,
-        Draggable = true
+        Position = window.originalPosition,
+        Size = window.originalSize,
+        Active = true, -- Essential for dragging
+        Draggable = false -- Custom dragging implemented, so disable built-in
     })
     
-    -- Corner Rounding
+    -- Enhanced border effect (purely visual)
+    local borderFrame = CreateElement("Frame", {
+        Name = "Border",
+        Parent = mainFrame,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 1,
+        BorderColor3 = Library.Theme.Border,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 0 -- Render behind other elements if needed
+    })
+    
+    -- Corner Rounding for main frame and border
     CreateElement("UICorner", {
         Parent = mainFrame,
         CornerRadius = UDim.new(0, 12)
     })
     
-    -- Acrylic Effect Frame
+    CreateElement("UICorner", {
+        Parent = borderFrame,
+        CornerRadius = UDim.new(0, 12)
+    })
+    
+    -- Acrylic Effect Frame (white with high transparency)
     local acrylicFrame = CreateElement("Frame", {
         Name = "AcrylicFrame",
         Parent = mainFrame,
         BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundTransparency = 0.95,
+        BackgroundTransparency = 0.97,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 1, 0)
     })
@@ -102,12 +167,12 @@ function Library:CreateWindow(title)
         CornerRadius = UDim.new(0, 12)
     })
     
-    -- Title Bar
+    -- Title Bar with proper dragging
     local titleBar = CreateElement("Frame", {
         Name = "TitleBar",
         Parent = mainFrame,
         BackgroundColor3 = Library.Theme.TitleBar,
-        BackgroundTransparency = 0.2,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 40)
     })
@@ -117,44 +182,47 @@ function Library:CreateWindow(title)
         CornerRadius = UDim.new(0, 12)
     })
     
-    -- Title Bar Bottom Filler
+    -- Title Bar Bottom Filler (to ensure corner rounding looks correct)
     CreateElement("Frame", {
         Parent = titleBar,
         BackgroundColor3 = Library.Theme.TitleBar,
-        BackgroundTransparency = 0.2,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 0.7, 0),
         Size = UDim2.new(1, 0, 0.3, 0)
     })
     
-    -- macOS Traffic Light Buttons
-    -- Close Button (Red)
+    -- Make window draggable using the title bar
+    MakeDraggable(mainFrame, titleBar)
+    
+    -- macOS Traffic Light Buttons with improved functionality
     local closeButton = CreateElement("TextButton", {
         Name = "CloseButton",
         Parent = titleBar,
-        BackgroundColor3 = Color3.fromRGB(255, 95, 86),
+        BackgroundColor3 = Library.Theme.Error,
         BorderSizePixel = 0,
-        Position = UDim2.new(0, 15, 0.5, -6),
+        Position = UDim2.new(0, 12, 0.5, -6),
         Size = UDim2.new(0, 12, 0, 12),
         Text = "",
-        AutoButtonColor = false
+        AutoButtonColor = false,
+        ZIndex = 2 -- Ensure buttons are on top
     })
     
     CreateElement("UICorner", {
         Parent = closeButton,
-        CornerRadius = UDim.new(1, 0)
+        CornerRadius = UDim.new(1, 0) -- Perfect circle
     })
     
-    -- Minimize Button (Yellow)
     local minimizeButton = CreateElement("TextButton", {
         Name = "MinimizeButton",
         Parent = titleBar,
-        BackgroundColor3 = Color3.fromRGB(255, 189, 46),
+        BackgroundColor3 = Library.Theme.Warning,
         BorderSizePixel = 0,
-        Position = UDim2.new(0, 35, 0.5, -6),
+        Position = UDim2.new(0, 32, 0.5, -6),
         Size = UDim2.new(0, 12, 0, 12),
         Text = "",
-        AutoButtonColor = false
+        AutoButtonColor = false,
+        ZIndex = 2
     })
     
     CreateElement("UICorner", {
@@ -162,16 +230,16 @@ function Library:CreateWindow(title)
         CornerRadius = UDim.new(1, 0)
     })
     
-    -- Maximize Button (Green)
     local maximizeButton = CreateElement("TextButton", {
         Name = "MaximizeButton",
         Parent = titleBar,
-        BackgroundColor3 = Color3.fromRGB(39, 201, 63),
+        BackgroundColor3 = Library.Theme.Success,
         BorderSizePixel = 0,
-        Position = UDim2.new(0, 55, 0.5, -6),
+        Position = UDim2.new(0, 52, 0.5, -6),
         Size = UDim2.new(0, 12, 0, 12),
         Text = "",
-        AutoButtonColor = false
+        AutoButtonColor = false,
+        ZIndex = 2
     })
     
     CreateElement("UICorner", {
@@ -184,120 +252,131 @@ function Library:CreateWindow(title)
         Name = "TitleText",
         Parent = titleBar,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 80, 0, 0),
-        Size = UDim2.new(1, -80, 1, 0),
+        Position = UDim2.new(0, 75, 0, 0),
+        Size = UDim2.new(1, -75, 1, 0),
         Font = Enum.Font.GothamMedium,
         Text = title or "Simpliness",
         TextColor3 = Library.Theme.Text,
         TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center
     })
     
-    -- Tab Container
+    -- Tab Container (left panel)
     local tabContainer = CreateElement("Frame", {
         Name = "TabContainer",
         Parent = mainFrame,
         BackgroundColor3 = Library.Theme.TabBackground,
-        BackgroundTransparency = 0.3,
+        BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 0, 40),
-        Size = UDim2.new(0, 200, 1, -40)
+        Size = UDim2.new(0, 180, 1, -40) -- Fills height below title bar
     })
     
-    -- Tab List
+    -- Tab List (scrollable area for tab buttons)
     local tabList = CreateElement("ScrollingFrame", {
         Name = "TabList",
         Parent = tabContainer,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 0, 10),
-        Size = UDim2.new(1, -20, 1, -20),
-        ScrollBarThickness = 2,
+        Position = UDim2.new(0, 8, 0, 8),
+        Size = UDim2.new(1, -16, 1, -16), -- Padded inside tabContainer
+        ScrollBarThickness = 3,
         ScrollBarImageColor3 = Library.Theme.Accent,
         BorderSizePixel = 0,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y
+        CanvasSize = UDim2.new(0, 0, 0, 0), -- Initial empty canvas size
+        AutomaticCanvasSize = Enum.AutomaticSize.Y, -- Automatically adjust canvas height
+        ScrollingDirection = Enum.ScrollingDirection.Y
     })
     
     CreateElement("UIListLayout", {
         Parent = tabList,
-        Padding = UDim.new(0, 5),
+        Padding = UDim.new(0, 4),
         SortOrder = Enum.SortOrder.LayoutOrder
     })
     
-    -- Content Container
+    -- Content Container (right panel for active tab content)
     local contentContainer = CreateElement("ScrollingFrame", {
         Name = "ContentContainer",
         Parent = mainFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 215, 0, 55),
-        Size = UDim2.new(1, -230, 1, -70),
+        Position = UDim2.new(0, 190, 0, 50), -- Right of tab container, below title bar
+        Size = UDim2.new(1, -200, 1, -60), -- Fills remaining space
         ScrollBarThickness = 4,
         ScrollBarImageColor3 = Library.Theme.Accent,
         BorderSizePixel = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y
     })
     
-    -- Layout
-    local layout = CreateElement("UIListLayout", {
+    CreateElement("UIListLayout", {
         Parent = contentContainer,
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 6),
         SortOrder = Enum.SortOrder.LayoutOrder
     })
     
-    -- Button functionality
-    local isMinimized = false
-    
+    -- Button functionality with proper state management
     closeButton.MouseButton1Click:Connect(function()
-        Tween(mainFrame, {Size = UDim2.new(0, 0, 0, 0)})
-        wait(0.15)
+        Tween(mainFrame, {Size = UDim2.new(0, 0, 0, 0)}, Library.FastTweenInfo)
+        task.wait(0.1) -- Small delay for tween to play out before destroying
         screenGui:Destroy()
     end)
     
     minimizeButton.MouseButton1Click:Connect(function()
-        if not isMinimized then
-            Tween(mainFrame, {Size = UDim2.new(0, 800, 0, 40)})
-            isMinimized = true
+        if not window.isMinimized then
+            Tween(mainFrame, {Size = UDim2.new(0, window.originalSize.X.Offset, 0, 40)}) -- Minimize to title bar height
+            window.isMinimized = true
         else
-            Tween(mainFrame, {Size = UDim2.new(0, 800, 0, 500)})
-            isMinimized = false
+            Tween(mainFrame, {Size = window.originalSize})
+            window.isMinimized = false
         end
     end)
     
-    maximizeButton.MouseButton1Click:Connect(function())
-        -- Placeholder for maximize functionality
+    maximizeButton.MouseButton1Click:Connect(function()
+        if not window.isMaximized then
+            -- Store current size and position before maximizing
+            window.originalSize = mainFrame.Size
+            window.originalPosition = mainFrame.Position
+            Tween(mainFrame, {
+                Size = UDim2.new(1, -20, 1, -20), -- Maximize to almost full screen
+                Position = UDim2.new(0, 10, 0, 10)
+            })
+            window.isMaximized = true
+        else
+            -- Restore original size and position
+            Tween(mainFrame, {
+                Size = window.originalSize,
+                Position = window.originalPosition
+            })
+            window.isMaximized = false
+        end
     end)
     
-    -- Hover effects for traffic light buttons
-    closeButton.MouseEnter:Connect(function()
-        Tween(closeButton, {BackgroundColor3 = Color3.fromRGB(255, 70, 61)})
-    end)
-    closeButton.MouseLeave:Connect(function()
-        Tween(closeButton, {BackgroundColor3 = Color3.fromRGB(255, 95, 86)})
-    end)
+    -- Enhanced hover effects for traffic light buttons
+    local function setupButtonHover(button, normalColor, hoverColor)
+        button.MouseEnter:Connect(function()
+            Tween(button, {BackgroundColor3 = hoverColor}, Library.FastTweenInfo)
+        end)
+        button.MouseLeave:Connect(function()
+            Tween(button, {BackgroundColor3 = normalColor}, Library.FastTweenInfo)
+        end)
+    end
     
-    minimizeButton.MouseEnter:Connect(function()
-        Tween(minimizeButton, {BackgroundColor3 = Color3.fromRGB(255, 174, 21)})
-    end)
-    minimizeButton.MouseLeave:Connect(function()
-        Tween(minimizeButton, {BackgroundColor3 = Color3.fromRGB(255, 189, 46)})
-    end)
-    
-    maximizeButton.MouseEnter:Connect(function()
-        Tween(maximizeButton, {BackgroundColor3 = Color3.fromRGB(24, 186, 48)})
-    end)
-    maximizeButton.MouseLeave:Connect(function()
-        Tween(maximizeButton, {BackgroundColor3 = Color3.fromRGB(39, 201, 63)})
-    end)
+    setupButtonHover(closeButton, Library.Theme.Error, Color3.fromRGB(255, 70, 61))
+    setupButtonHover(minimizeButton, Library.Theme.Warning, Color3.fromRGB(255, 174, 21))
+    setupButtonHover(maximizeButton, Library.Theme.Success, Color3.fromRGB(24, 186, 48))
     
     window.Container = contentContainer
-    window.Layout = layout
+    window.Layout = contentContainer:FindFirstChild("UIListLayout")
     window.TabList = tabList
+    window.ScreenGui = screenGui
     
-    -- Tab Function
+    -- Tab Function with improved management
     function window:Tab(text)
         local tab = {
-            elements = {}
+            elements = {}, -- To hold references to elements within this tab
+            button = nil,
+            content = nil
         }
         
         local tabButton = CreateElement("TextButton", {
@@ -305,12 +384,13 @@ function Library:CreateWindow(title)
             Parent = self.TabList,
             BackgroundColor3 = Library.Theme.Secondary,
             BorderSizePixel = 0,
-            Size = UDim2.new(1, 0, 0, 35),
+            Size = UDim2.new(1, 0, 0, 32),
             Font = Enum.Font.Gotham,
             Text = text or "Tab",
             TextColor3 = Library.Theme.TextSecondary,
-            TextSize = 13,
-            TextXAlignment = Enum.TextXAlignment.Left
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Center
         })
         
         CreateElement("UICorner", {
@@ -320,82 +400,88 @@ function Library:CreateWindow(title)
         
         CreateElement("UIPadding", {
             Parent = tabButton,
-            PaddingLeft = UDim.new(0, 12)
+            PaddingLeft = UDim.new(0, 10)
         })
         
         local tabContent = CreateElement("Frame", {
-            Name = "TabContent",
+            Name = "TabContent_" .. text:gsub("%s+", "_"), -- Unique name for tab content frame
             Parent = self.Container,
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Visible = false
+            Size = UDim2.new(1, 0, 0, 0), -- Initial size, will be adjusted by AutomaticSize
+            Visible = false, -- Hidden by default
+            AutomaticSize = Enum.AutomaticSize.Y -- Automatically adjust height based on children
         })
         
         CreateElement("UIListLayout", {
             Parent = tabContent,
-            Padding = UDim.new(0, 8),
+            Padding = UDim.new(0, 6),
             SortOrder = Enum.SortOrder.LayoutOrder
         })
         
         tabButton.MouseButton1Click:Connect(function()
-            -- Hide all tabs
+            -- Hide all tabs and reset their button colors
             for _, tabData in pairs(self.tabs) do
-                tabData.content.Visible = false
-                Tween(tabData.button, {
-                    BackgroundColor3 = Library.Theme.Secondary,
-                    TextColor3 = Library.Theme.TextSecondary
-                })
+                if tabData.content then
+                    tabData.content.Visible = false
+                end
+                if tabData.button then
+                    Tween(tabData.button, {
+                        BackgroundColor3 = Library.Theme.Secondary,
+                        TextColor3 = Library.Theme.TextSecondary
+                    }, Library.FastTweenInfo)
+                end
             end
             
-            -- Show selected tab
+            -- Show selected tab and highlight its button
             tabContent.Visible = true
             Tween(tabButton, {
                 BackgroundColor3 = Library.Theme.Accent,
                 TextColor3 = Library.Theme.Text
-            })
+            }, Library.FastTweenInfo)
             
             self.currentTab = tab
         end)
         
         tabButton.MouseEnter:Connect(function()
-            if self.currentTab ~= tab then
-                Tween(tabButton, {BackgroundColor3 = Library.Theme.Hover})
+            if self.currentTab ~= tab then -- Only apply hover if not already active
+                Tween(tabButton, {BackgroundColor3 = Library.Theme.Hover}, Library.FastTweenInfo)
             end
         end)
         
         tabButton.MouseLeave:Connect(function()
-            if self.currentTab ~= tab then
-                Tween(tabButton, {BackgroundColor3 = Library.Theme.Secondary})
+            if self.currentTab ~= tab then -- Only revert hover if not active
+                Tween(tabButton, {BackgroundColor3 = Library.Theme.Secondary}, Library.FastTweenInfo)
             end
         end)
         
         tab.button = tabButton
         tab.content = tabContent
         
-        -- If this is the first tab, make it active
+        -- If this is the first tab, make it active by default
         if #self.tabs == 0 then
             tabContent.Visible = true
             Tween(tabButton, {
                 BackgroundColor3 = Library.Theme.Accent,
                 TextColor3 = Library.Theme.Text
-            })
+            }, Library.FastTweenInfo)
             self.currentTab = tab
         end
         
         table.insert(self.tabs, tab)
         
-        -- Button Function for Tab
+        -- Enhanced Button Function
         function tab:Button(text, callback)
             local button = CreateElement("TextButton", {
-                Name = "Button",
+                Name = "Button_" .. text:gsub("%s+", "_"),
                 Parent = tabContent,
                 BackgroundColor3 = Library.Theme.Secondary,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 35),
+                Size = UDim2.new(1, 0, 0, 32),
                 Font = Enum.Font.Gotham,
                 Text = text or "Button",
                 TextColor3 = Library.Theme.Text,
-                TextSize = 14
+                TextSize = 13,
+                TextYAlignment = Enum.TextYAlignment.Center
             })
             
             CreateElement("UICorner", {
@@ -404,28 +490,37 @@ function Library:CreateWindow(title)
             })
             
             button.MouseButton1Click:Connect(function()
-                if callback then callback() end
+                -- Visual click feedback
+                Tween(button, {BackgroundColor3 = Library.Theme.Accent}, Library.FastTweenInfo)
+                task.wait(0.1) -- Short delay for visual effect
+                Tween(button, {BackgroundColor3 = Library.Theme.Secondary}, Library.FastTweenInfo)
+                
+                if callback then 
+                    pcall(callback) -- Use pcall to prevent user callback errors from breaking the UI
+                end
             end)
             
             button.MouseEnter:Connect(function()
-                Tween(button, {BackgroundColor3 = Library.Theme.Hover})
+                Tween(button, {BackgroundColor3 = Library.Theme.Hover}, Library.FastTweenInfo)
             end)
             
             button.MouseLeave:Connect(function()
-                Tween(button, {BackgroundColor3 = Library.Theme.Secondary})
+                Tween(button, {BackgroundColor3 = Library.Theme.Secondary}, Library.FastTweenInfo)
             end)
             
             return button
         end
         
-        -- Toggle Function for Tab
+        -- Enhanced Toggle Function
         function tab:Toggle(text, default, callback)
+            local toggled = default or false
+            
             local toggleFrame = CreateElement("Frame", {
-                Name = "ToggleFrame",
+                Name = "ToggleFrame_" .. text:gsub("%s+", "_"),
                 Parent = tabContent,
                 BackgroundColor3 = Library.Theme.Secondary,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 35)
+                Size = UDim2.new(1, 0, 0, 32)
             })
             
             CreateElement("UICorner", {
@@ -437,23 +532,25 @@ function Library:CreateWindow(title)
                 Name = "ToggleLabel",
                 Parent = toggleFrame,
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 15, 0, 0),
+                Position = UDim2.new(0, 12, 0, 0),
                 Size = UDim2.new(1, -50, 1, 0),
                 Font = Enum.Font.Gotham,
                 Text = text or "Toggle",
                 TextColor3 = Library.Theme.Text,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Center
             })
             
             local toggleButton = CreateElement("TextButton", {
                 Name = "ToggleButton",
                 Parent = toggleFrame,
-                BackgroundColor3 = default and Library.Theme.Accent or Library.Theme.Border,
+                BackgroundColor3 = toggled and Library.Theme.Accent or Library.Theme.Border,
                 BorderSizePixel = 0,
-                Position = UDim2.new(1, -40, 0.5, -8),
-                Size = UDim2.new(0, 35, 0, 16),
-                Text = ""
+                Position = UDim2.new(1, -36, 0.5, -7),
+                Size = UDim2.new(0, 32, 0, 14),
+                Text = "",
+                AutoButtonColor = false
             })
             
             CreateElement("UICorner", {
@@ -466,8 +563,8 @@ function Library:CreateWindow(title)
                 Parent = toggleButton,
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                 BorderSizePixel = 0,
-                Position = default and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6),
-                Size = UDim2.new(0, 12, 0, 12)
+                Position = toggled and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5),
+                Size = UDim2.new(0, 10, 0, 10)
             })
             
             CreateElement("UICorner", {
@@ -475,28 +572,32 @@ function Library:CreateWindow(title)
                 CornerRadius = UDim.new(1, 0)
             })
             
-            local toggled = default or false
-            
             toggleButton.MouseButton1Click:Connect(function()
                 toggled = not toggled
                 
                 Tween(toggleButton, {BackgroundColor3 = toggled and Library.Theme.Accent or Library.Theme.Border})
-                Tween(toggleIndicator, {Position = toggled and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)})
+                Tween(toggleIndicator, {Position = toggled and UDim2.new(1, -12, 0.5, -5) or UDim2.new(0, 2, 0.5, -5)})
                 
-                if callback then callback(toggled) end
+                if callback then 
+                    pcall(callback, toggled)
+                end
             end)
             
-            return toggleFrame
+            -- Return the frame and a getter function for its state
+            return toggleFrame, function() return toggled end
         end
         
-        -- Slider Function for Tab (with smaller handle)
-        function tab:Slider(text, min, max, default, callback)
+        -- Enhanced Slider Function
+        function tab:Slider(text, min, max, default, decimals, callback)
+            decimals = decimals or 0
+            local currentValue = ClampNumber(default or min, min, max)
+            
             local sliderFrame = CreateElement("Frame", {
-                Name = "SliderFrame",
+                Name = "SliderFrame_" .. text:gsub("%s+", "_"),
                 Parent = tabContent,
                 BackgroundColor3 = Library.Theme.Secondary,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 55)
+                Size = UDim2.new(1, 0, 0, 50)
             })
             
             CreateElement("UICorner", {
@@ -508,12 +609,12 @@ function Library:CreateWindow(title)
                 Name = "SliderLabel",
                 Parent = sliderFrame,
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 15, 0, 5),
-                Size = UDim2.new(1, -30, 0, 18),
+                Position = UDim2.new(0, 12, 0, 4),
+                Size = UDim2.new(1, -60, 0, 16),
                 Font = Enum.Font.Gotham,
                 Text = text or "Slider",
                 TextColor3 = Library.Theme.Text,
-                TextSize = 14,
+                TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left
             })
             
@@ -521,11 +622,11 @@ function Library:CreateWindow(title)
                 Name = "SliderValue",
                 Parent = sliderFrame,
                 BackgroundTransparency = 1,
-                Position = UDim2.new(1, -50, 0, 5),
-                Size = UDim2.new(0, 35, 0, 18),
-                Font = Enum.Font.Gotham,
-                Text = tostring(default or min),
-                TextColor3 = Library.Theme.TextSecondary,
+                Position = UDim2.new(1, -48, 0, 4),
+                Size = UDim2.new(0, 36, 0, 16),
+                Font = Enum.Font.GothamMedium,
+                Text = tostring(FormatNumber(currentValue, decimals)),
+                TextColor3 = Library.Theme.Accent,
                 TextSize = 12,
                 TextXAlignment = Enum.TextXAlignment.Right
             })
@@ -535,8 +636,8 @@ function Library:CreateWindow(title)
                 Parent = sliderFrame,
                 BackgroundColor3 = Library.Theme.Border,
                 BorderSizePixel = 0,
-                Position = UDim2.new(0, 15, 1, -15),
-                Size = UDim2.new(1, -30, 0, 4)
+                Position = UDim2.new(0, 12, 1, -12), -- Positioned at the bottom of the frame
+                Size = UDim2.new(1, -24, 0, 3)
             })
             
             CreateElement("UICorner", {
@@ -544,12 +645,14 @@ function Library:CreateWindow(title)
                 CornerRadius = UDim.new(1, 0)
             })
             
+            local percentage = (currentValue - min) / (max - min)
+            
             local sliderFill = CreateElement("Frame", {
                 Name = "SliderFill",
                 Parent = sliderTrack,
                 BackgroundColor3 = Library.Theme.SliderAccent,
                 BorderSizePixel = 0,
-                Size = UDim2.new((default or min) / (max - min), 0, 1, 0)
+                Size = UDim2.new(percentage, 0, 1, 0)
             })
             
             CreateElement("UICorner", {
@@ -557,14 +660,13 @@ function Library:CreateWindow(title)
                 CornerRadius = UDim.new(1, 0)
             })
             
-            -- Smaller Slider Handle
             local sliderHandle = CreateElement("Frame", {
                 Name = "SliderHandle",
                 Parent = sliderTrack,
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                 BorderSizePixel = 0,
-                Position = UDim2.new((default or min) / (max - min), -6, 0.5, -6),
-                Size = UDim2.new(0, 12, 0, 12),
+                Position = UDim2.new(percentage, -5, 0.5, -5), -- Centered on the track
+                Size = UDim2.new(0, 10, 0, 10),
                 ZIndex = 2
             })
             
@@ -573,62 +675,71 @@ function Library:CreateWindow(title)
                 CornerRadius = UDim.new(1, 0)
             })
             
+            -- Invisible button over the track to capture clicks and drags
             local sliderButton = CreateElement("TextButton", {
                 Name = "SliderButton",
                 Parent = sliderTrack,
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 1, 0),
+                Size = UDim2.new(1, 0, 1, 20), -- Slightly taller to make it easier to click
+                Position = UDim2.new(0, 0, 0, -10), -- Offset to cover handle
                 Text = ""
             })
             
-            local currentValue = default or min
             local dragging = false
             
-            local function updateSlider(input)
-                local percentage = math.clamp((input.Position.X - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
-                currentValue = math.floor(min + (max - min) * percentage)
+            local function updateSlider(inputX)
+                -- Calculate relative position within the track
+                local relativePos = ClampNumber((inputX - sliderTrack.AbsolutePosition.X) / sliderTrack.AbsoluteSize.X, 0, 1)
+                -- Map relative position back to the value range
+                currentValue = FormatNumber(min + (max - min) * relativePos, decimals)
+                currentValue = ClampNumber(currentValue, min, max) -- Ensure value stays within min/max
+                
+                local newPercentage = (currentValue - min) / (max - min)
                 
                 sliderValue.Text = tostring(currentValue)
-                Tween(sliderFill, {Size = UDim2.new(percentage, 0, 1, 0)})
-                Tween(sliderHandle, {Position = UDim2.new(percentage, -6, 0.5, -6)})
+                Tween(sliderFill, {Size = UDim2.new(newPercentage, 0, 1, 0)}, Library.FastTweenInfo)
+                Tween(sliderHandle, {Position = UDim2.new(newPercentage, -5, 0.5, -5)}, Library.FastTweenInfo)
                 
-                if callback then callback(currentValue) end
+                if callback then 
+                    pcall(callback, currentValue)
+                end
             end
             
             sliderButton.MouseButton1Down:Connect(function()
                 dragging = true
-                Tween(sliderHandle, {Size = UDim2.new(0, 16, 0, 16)})
+                Tween(sliderHandle, {Size = UDim2.new(0, 14, 0, 14)}, Library.FastTweenInfo) -- Enlarge handle on press
+                updateSlider(UserInputService:GetMouseLocation().X) -- Update immediately on click
             end)
             
             UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
                     dragging = false
-                    Tween(sliderHandle, {Size = UDim2.new(0, 12, 0, 12)})
+                    Tween(sliderHandle, {Size = UDim2.new(0, 10, 0, 10)}, Library.FastTweenInfo) -- Revert handle size
                 end
             end)
             
             UserInputService.InputChanged:Connect(function(input)
                 if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    updateSlider(input)
+                    updateSlider(input.Position.X)
                 end
             end)
             
-            sliderButton.MouseButton1Click:Connect(function()
-                updateSlider(UserInputService:GetMouseLocation())
-            end)
-            
-            return sliderFrame
+            -- Return the frame and a getter function for the current value
+            return sliderFrame, function() return currentValue end
         end
         
-        -- Dropdown Function for Tab
-        function tab:Dropdown(text, options, callback)
+        -- Enhanced Dropdown Function
+        function tab:Dropdown(text, options, default, callback)
+            local currentOption = default or (options and options[1]) or "None"
+            local isOpen = false
+            
             local dropdownFrame = CreateElement("Frame", {
-                Name = "DropdownFrame",
+                Name = "DropdownFrame_" .. text:gsub("%s+", "_"),
                 Parent = tabContent,
                 BackgroundColor3 = Library.Theme.Secondary,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 35),
-                ClipsDescendants = true
+                Size = UDim2.new(1, 0, 0, 32), -- Initial size (closed)
+                ClipsDescendants = true -- Crucial for hiding options when closed
             })
             
             CreateElement("UICorner", {
@@ -640,28 +751,29 @@ function Library:CreateWindow(title)
                 Name = "DropdownButton",
                 Parent = dropdownFrame,
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 35),
+                Size = UDim2.new(1, 0, 0, 32),
                 Font = Enum.Font.Gotham,
-                Text = text or "Dropdown",
+                Text = text .. ": " .. currentOption, -- Correctly displays label and current option
                 TextColor3 = Library.Theme.Text,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Center
             })
             
             CreateElement("UIPadding", {
                 Parent = dropdownButton,
-                PaddingLeft = UDim.new(0, 15)
+                PaddingLeft = UDim.new(0, 12)
             })
             
             local dropdownArrow = CreateElement("TextLabel", {
                 Name = "DropdownArrow",
                 Parent = dropdownFrame,
                 BackgroundTransparency = 1,
-                Position = UDim2.new(1, -30, 0, 0),
-                Size = UDim2.new(0, 30, 0, 35),
+                Position = UDim2.new(1, -24, 0, 0),
+                Size = UDim2.new(0, 24, 0, 32),
                 Font = Enum.Font.Gotham,
                 Text = "▼",
-                TextColor3 = Library.Theme.TextSecondary,
+                TextColor3 = Library.Theme.TextSecondary, -- Fixed missing comma
                 TextSize = 12
             })
             
@@ -669,22 +781,22 @@ function Library:CreateWindow(title)
                 Name = "OptionsContainer",
                 Parent = dropdownFrame,
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 0, 0, 35),
-                Size = UDim2.new(1, 0, 0, 0)
+                Position = UDim2.new(0, 0, 0, 32), -- Positioned below the main button
+                Size = UDim2.new(1, 0, 0, 0), -- Initial size, will be automatically sized by UIListLayout
+                AutomaticSize = Enum.AutomaticSize.Y -- Automatically adjust height based on children
             })
             
             CreateElement("UIListLayout", {
                 Parent = optionsContainer,
+                Padding = UDim.new(0, 0), -- No padding between options
                 SortOrder = Enum.SortOrder.LayoutOrder
             })
-            
-            local isOpen = false
             
             for i, option in ipairs(options or {}) do
                 local optionButton = CreateElement("TextButton", {
                     Name = "Option" .. i,
                     Parent = optionsContainer,
-                    BackgroundColor3 = Library.Theme.Hover,
+                    BackgroundColor3 = Library.Theme.Hover, -- Options have a slightly different background
                     BorderSizePixel = 0,
                     Size = UDim2.new(1, 0, 0, 30),
                     Font = Enum.Font.Gotham,
@@ -700,13 +812,15 @@ function Library:CreateWindow(title)
                 })
                 
                 optionButton.MouseButton1Click:Connect(function()
-                    dropdownButton.Text = option
+                    currentOption = option -- Update the current selected option
+                    dropdownButton.Text = text .. ": " .. currentOption -- Update button text
                     isOpen = false
                     
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 35)})
+                    -- Close dropdown animation
+                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 32)})
                     Tween(dropdownArrow, {Rotation = 0})
                     
-                    if callback then callback(option) end
+                    if callback then pcall(callback, currentOption) end
                 end)
                 
                 optionButton.MouseEnter:Connect(function()
@@ -722,21 +836,24 @@ function Library:CreateWindow(title)
                 isOpen = not isOpen
                 
                 if isOpen then
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 35 + #options * 30)})
+                    -- Open dropdown animation (main button height + (number of options * option height))
+                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 32 + #options * 30)})
                     Tween(dropdownArrow, {Rotation = 180})
                 else
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 35)})
+                    -- Close dropdown animation
+                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 32)})
                     Tween(dropdownArrow, {Rotation = 0})
                 end
             end)
             
-            return dropdownFrame
+            -- Return the dropdown frame and a getter for its current value
+            return dropdownFrame, function() return currentOption end
         end
         
         -- Label Function for Tab
         function tab:Label(text)
             local label = CreateElement("TextLabel", {
-                Name = "Label",
+                Name = "Label_" .. text:gsub("%s+", "_"),
                 Parent = tabContent,
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, 0, 0, 25),
@@ -754,6 +871,83 @@ function Library:CreateWindow(title)
             
             return label
         end
+
+        -- New TextInput Function
+        function tab:TextInput(text, defaultText, callback)
+            local currentText = defaultText or ""
+
+            local textInputFrame = CreateElement("Frame", {
+                Name = "TextInputFrame_" .. text:gsub("%s+", "_"),
+                Parent = tabContent,
+                BackgroundColor3 = Library.Theme.Secondary,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 50) -- Taller to accommodate label and input
+            })
+            
+            CreateElement("UICorner", {
+                Parent = textInputFrame,
+                CornerRadius = UDim.new(0, 6)
+            })
+
+            local inputLabel = CreateElement("TextLabel", {
+                Name = "InputLabel",
+                Parent = textInputFrame,
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 4),
+                Size = UDim2.new(1, -24, 0, 16),
+                Font = Enum.Font.Gotham,
+                Text = text or "Input",
+                TextColor3 = Library.Theme.Text,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left
+            })
+
+            local textBox = CreateElement("TextBox", {
+                Name = "TextBox",
+                Parent = textInputFrame,
+                BackgroundColor3 = Library.Theme.Border, -- Slightly darker background for input field
+                BorderSizePixel = 0,
+                Position = UDim2.new(0, 12, 0, 25), -- Positioned below the label
+                Size = UDim2.new(1, -24, 0, 20),
+                Font = Enum.Font.Gotham,
+                Text = currentText,
+                TextColor3 = Library.Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Center,
+                ClearTextOnFocus = false -- Keep text when focused
+            })
+
+            CreateElement("UICorner", {
+                Parent = textBox,
+                CornerRadius = UDim.new(0, 4) -- Slightly smaller corner radius for input field
+            })
+
+            CreateElement("UIPadding", {
+                Parent = textBox,
+                PaddingLeft = UDim.new(0, 5)
+            })
+
+            textBox.FocusLost:Connect(function(enterPressed)
+                -- Update currentText when focus is lost or Enter is pressed
+                currentText = textBox.Text
+                if callback then
+                    pcall(callback, currentText, enterPressed)
+                end
+            end)
+
+            textBox.Changed:Connect(function(property)
+                -- Optionally, if you want real-time updates as text changes
+                if property == "Text" then
+                    currentText = textBox.Text
+                    -- You might not want to call the callback on every character change for performance
+                    -- unless specifically required. FocusLost is usually sufficient.
+                end
+            end)
+
+            -- Return the frame and a getter for its current text
+            return textInputFrame, function() return currentText end
+        end
         
         return tab
     end
@@ -762,3 +956,4 @@ function Library:CreateWindow(title)
 end
 
 return Library
+
